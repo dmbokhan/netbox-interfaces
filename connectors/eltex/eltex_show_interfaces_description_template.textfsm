@@ -1,0 +1,10 @@
+Value Interface (.*\d)
+Value Port_Mode (Access.*\)|Trunk|General)
+Value Status (up|down|Up|Down)
+Value Protocol (up|down|Not Present|Up|Down)
+Value Description (.*)
+
+Start
+  ^${Interface}\s+${Port_Mode}\s+${Status}\s+${Protocol}\s+${Description} -> Record
+  ^${Interface}\s+${Port_Mode}\s+${Status}\s+${Protocol} -> Record
+  ^${Interface} -> Record
