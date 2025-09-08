@@ -26,4 +26,7 @@ class NB:
             nb_device = self.nb.dcim.devices.get(name=device['hostname'])
             for interface in device['interfaces']:
                 interface['device'] = nb_device.id
-                new_interface = self.nb.dcim.interfaces.create(**interface)
+                try:
+                    new_interface = self.nb.dcim.interfaces.create(**interface)
+                except pynetbox.core.query.RequestError as e:
+                    logging.warning(f"{e} - {device['hostname']} {interface['name']}")
