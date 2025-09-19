@@ -94,6 +94,10 @@ class Eltex(BaseConnector):
             interface_data['type'] = _define_interface_type(interface_data['name'])
             interface_data['enabled'] = True if interface['protocol'].lower() == 'up' else False
             interface_data['description'] = interface['description']
+            if interface_data['enabled'] == False and interface_data['description'] == '':
+                ### ignore empty interfaces
+                del interface_data
+                continue
             result['interfaces'].append(interface_data.copy())
             del interface_data
 
