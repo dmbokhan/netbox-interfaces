@@ -4,7 +4,6 @@ import re
 from pathlib import Path
 
 from jnpr.junos import Device
-from jnpr.junos.op.ethport import EthPortTable
 
 from connectors.base_connector import BaseConnector
 
@@ -23,7 +22,14 @@ class Juniper(BaseConnector):
         try:
             with Device(**device) as ssh:
                 hostname = ssh.facts['hostname']
-                output = EthPortTable(ssh).get('*')
+                output = ssh.rpc.get_interface_information({'format':'json'})
+
+                # retrieve logical interfaces
+                logical_interfaces = list()
+                for interface in output['interface-information'][0]['physical-interface']:
+                    if 'logical-interface' in interface:
+                        for logical_interface in interface['logical-interface']:
+                            logical_interfaces.append(logical_interface.copy())
         except Exception as e:
             logging.error(e)
             sys.exit()
@@ -31,7 +37,8 @@ class Juniper(BaseConnector):
 
         result = {
             "hostname": str(hostname),
-            "interfaces": output,
+            "physical-interfaces": output['interface-information'][0]['physical-interface'],
+            "logical-interfaces": logical_interfaces
         }
         
         return result
@@ -42,7 +49,7 @@ class Juniper(BaseConnector):
             "interfaces": list()
         }
 
-        def _define_interface_type(interface_name):
+        def _define_interface_type(interface_name, speed):
             """ Define interface_type by interface_name"""
             interface_name = interface_name.lower()
             if interface_name.startswith('irb'):
@@ -58,23 +65,43 @@ class Juniper(BaseConnector):
             if interface_name.startswith('xe'):
                 return '10gbase-x-sfpp'
             if interface_name.startswith('et'):
-                return '25gbase-x-sfp28'
+                if speed == '1Gbps':
+                    return '1000base-t'
+                if speed == '10Gbps':
+                    return '10gbase-x-sfpp'
+                if speed == '25Gbps':
+                    return '25gbase-x-sfp28'
+                if speed == '100Gbps':
+                    return '100gbase-x-qsfp28'
             if interface_name.startswith('ae'):
                 return 'lag'
             return 'other'
 
-        for interface in data['interfaces']:
+        for interface in data['physical-interfaces']:
             interface_data = dict()
-            if not interface.name.startswith(('irb', 'lo', 'em', 're', 'ge', 'xe', 'et', 'ae')):
+            if not interface['name'][0]['data'].startswith(('irb', 'lo', 'em', 're', 'ge', 'xe', 'et', 'ae')):
                 continue
-            interface_data['name'] = interface.name
-            interface_data['type'] = _define_interface_type(interface_data['name'])
-            interface_data['enabled'] = True if interface.admin == 'up' else False
-            if interface.description is not None:
-                interface_data['description'] = interface.description
-            if not interface.name.startswith(('lo',)):
-                interface_data['mtu'] = interface.mtu
+            interface_data['name'] = interface['name'][0]['data']
+            interface_data['enabled'] = True if interface['admin-status'][0]['data'] == 'up' else False
+            if 'speed' in interface:
+                interface_data['type'] = _define_interface_type(interface_data['name'], interface['speed'][0]['data'])
+            if 'description' in interface:
+                interface_data['description'] = interface['description'][0]['data']
+            if 'mtu' in interface:
+                if interface['mtu'][0]['data'].isdigit():  # mtu must contains only digits
+                    interface_data['mtu'] = int(interface['mtu'][0]['data'])
             result['interfaces'].append(interface_data.copy())
             del interface_data
+
+#        for interface in data['logical-interfaces']:
+#            interface_data = dict()
+#            if not interface['name'][0]['data'].startswith(('irb', 'lo', 'ge', 'xe', 'et', 'ae')):
+#                continue
+#            interface_data['name'] = interface['name'][0]['data']
+#            interface_data['type'] = 'virtual'
+#            if 'description' in interface:
+#                interface_data['description'] = interface['description'][0]['data']
+#            result['interfaces'].append(interface_data.copy())
+#            del interface_data
 
         return result
