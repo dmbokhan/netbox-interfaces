@@ -157,11 +157,13 @@ class NB:
                 if nb_interface is None:  # interface doesn't exist, need to create it
                     interface['device'] = nb_device.id
                     try:
+                        logging.info(f"create {device['hostname']} {interface['name']}")
                         new_interface = self.nb.dcim.interfaces.create(**interface)
                     except pynetbox.core.query.RequestError as e:
                         logging.warning(f"{e} - {device['hostname']} {interface['name']}")
                 else:  # interface exists, need to update it
                     try:
+                        logging.info(f"update {device['hostname']} {interface['name']}")
                         update_interface = nb_interface.update(interface)
                     except pynetbox.core.query.RequestError as e:
                         logging.warning(f"{e} - {device['hostname']} {interface['name']}")

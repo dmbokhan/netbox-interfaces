@@ -2,7 +2,6 @@ import logging
 import sys
 import re
 from pathlib import Path
-from lxml import etree
 
 from jnpr.junos import Device
 
