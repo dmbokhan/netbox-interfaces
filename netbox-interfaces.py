@@ -9,7 +9,7 @@ from getpass import getpass
 from connectors.connector_factory import ConnectorFactory
 from connectors.netbox import NB
 
-import pprint
+import json
 
 
 def file_type(source):
@@ -47,9 +47,11 @@ def main():
         )
         interfaces = connector.get_interfaces()
         interfaces_normalized = connector.get_interfaces_normalize(interfaces)
+        interfaces_normalized = netbox.not_update_identic_interface_fields(interfaces_normalized)
         netbox_normalized.append(interfaces_normalized)
-        pprint.pprint(interfaces_normalized)
-    
+    netbox_normalized = netbox.not_update_identic_devices(netbox_normalized)
+
+    print(f"Actions: {json.dumps(netbox.show_diff(netbox_normalized), indent=4)}")
     ask_netbox_add = input('Add interfaces to Netbox? Y/N: ')
     if ask_netbox_add.lower() == 'y':
         netbox.add_interfaces(netbox_normalized)

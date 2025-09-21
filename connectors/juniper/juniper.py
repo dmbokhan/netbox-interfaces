@@ -2,6 +2,7 @@ import logging
 import sys
 import re
 from pathlib import Path
+from lxml import etree
 
 from jnpr.junos import Device
 
@@ -21,7 +22,10 @@ class Juniper(BaseConnector):
         logging.info(f"Connect to {self.ip}")
         try:
             with Device(**device) as ssh:
-                hostname = ssh.facts['hostname']
+                hostname = ssh.rpc.get_config(
+                    filter_xml='<system><host-name></host-name></system>',
+                    options={'format':'json'}
+                )['configuration']['system']['host-name']
                 output = ssh.rpc.get_interface_information({'format':'json'})
 
                 # retrieve logical interfaces
@@ -49,7 +53,7 @@ class Juniper(BaseConnector):
             "interfaces": list()
         }
 
-        def _define_interface_type(interface_name, speed):
+        def _define_interface_type(interface_name, speed=None):
             """ Define interface_type by interface_name"""
             interface_name = interface_name.lower()
             if interface_name.startswith('irb'):
@@ -84,15 +88,18 @@ class Juniper(BaseConnector):
             interface_data['name'] = interface['name'][0]['data']
             interface_data['enabled'] = True if interface['admin-status'][0]['data'] == 'up' else False
             if 'speed' in interface:
-                interface_data['type'] = _define_interface_type(interface_data['name'], interface['speed'][0]['data'])
+                interface_data['type'] = _define_interface_type(interface_data['name'], speed=interface['speed'][0]['data'])
+            else:
+                interface_data['type'] = _define_interface_type(interface_data['name'])  # not all interfaces have speed
             if 'description' in interface:
                 interface_data['description'] = interface['description'][0]['data']
             if 'mtu' in interface:
-                if interface['mtu'][0]['data'].isdigit():  # mtu must contains only digits
+                if interface['mtu'][0]['data'].isdigit():  # mtu must contain only digits
                     interface_data['mtu'] = int(interface['mtu'][0]['data'])
             result['interfaces'].append(interface_data.copy())
             del interface_data
 
+### for logical interfaces
 #        for interface in data['logical-interfaces']:
 #            interface_data = dict()
 #            if not interface['name'][0]['data'].startswith(('irb', 'lo', 'ge', 'xe', 'et', 'ae')):
