@@ -3,12 +3,14 @@ import sys
 from pathlib import Path
 import configparser
 
+import requests.exceptions
+import urllib3
 import pynetbox
 
 
 class NB:
     """ Main Netbox class"""
-    def __init__(self):
+    def __init__(self, insecure=False):
         config = configparser.ConfigParser()
         config.read(
             Path(__file__).resolve(strict=True).parents[1].joinpath('settings.ini')
@@ -19,7 +21,23 @@ class NB:
             self.address,
             token=self.token,
         )
-        self.nb.http_session.verify = False
+        if insecure:
+            self.nb.http_session.verify = False
+            urllib3.disable_warnings()
+
+        try:
+            self.nb.status()
+        except requests.exceptions.RequestException as e:
+            logging.error(e)
+            sys.exit()
+
+    def get_netbox_device(self, hostname):
+        """ Get NetBox device by hostname """
+        device = self.nb.dcim.devices.get(name=hostname)
+        if device is None:
+            logging.error(f"Can't find {hostname} in NetBox devices")
+            sys.exit()
+        return device
 
     def get_netbox_interfaces(self, device):
         """ Get NetBox interfaces by device id """
@@ -46,7 +64,7 @@ class NB:
         }
         
         """
-        nb_device = self.nb.dcim.devices.get(name=data['hostname'])
+        nb_device = self.get_netbox_device(data['hostname'])
         nb_interfaces = self.get_netbox_interfaces(nb_device)
 
         for interface in data['interfaces']:
@@ -80,7 +98,7 @@ class NB:
             # iterate again to clear interfaces that don't need updating
             if len(interface) == 1:
                 logging.info(
-                    f"{data['hostname']} interface {interface['name']} doesn't need updating at all"
+                    f"{data['hostname']} interface {interface['name']} doesn't need updating"
                 )
                 interfaces_do_not_need_updating.append(i)
         data['interfaces'] = [i for j, i in enumerate(data['interfaces']) if j not in interfaces_do_not_need_updating]
@@ -95,7 +113,7 @@ class NB:
         for i, device in enumerate(data):
             if len(device['interfaces']) == 0:
                 logging.info(
-                    f"device {device['hostname']} doesn't need updating at all"
+                    f"{device['hostname']} doesn't need updating"
                 )
                 devices_do_not_need_updating.append(i)
         data = [i for j, i in enumerate(data) if j not in devices_do_not_need_updating]
@@ -167,4 +185,20 @@ class NB:
                         update_interface = nb_interface.update(interface)
                     except pynetbox.core.query.RequestError as e:
                         logging.warning(f"{e} - {device['hostname']} {interface['name']}")
+
+    def result_message(self, data) -> str:
+        """ Prepare final message, based on show diff """
+        result = "Summary: "
+        total_edits = 0
+        outputs = str()
+        for device in data:
+            total_edits += len(device['create_interfaces'])
+            total_edits += len(device['update_interfaces'])
+            outputs += (
+                f"{device['hostname']} interfaces {len(device['create_interfaces'])} created,"
+                f"{len(device['update_interfaces'])} updated\n"
+            )
+        if total_edits == 0:
+            return result + "Nothing to do."
+        return result + "\n" + outputs
 

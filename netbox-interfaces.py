@@ -38,7 +38,7 @@ def main():
     inventory = read_csv(args.inventory)
     credentials = {'username': input('login: '), 'password': getpass('password: ')}
     connector_factory = ConnectorFactory()
-    netbox = NB()
+    netbox = NB(insecure=args.insecure)
     netbox_normalized = list()
 
     for device in inventory:
@@ -51,10 +51,19 @@ def main():
         netbox_normalized.append(interfaces_normalized)
     netbox_normalized = netbox.not_update_identic_devices(netbox_normalized)
 
-    print(f"Actions: {json.dumps(netbox.show_diff(netbox_normalized), indent=4)}")
-    ask_netbox_add = input('Add interfaces to Netbox? Y/N: ')
-    if ask_netbox_add.lower() == 'y':
+    show_diff = netbox.show_diff(netbox_normalized)
+    print(f"Actions: {json.dumps(show_diff, indent=4)}")
+    if args.force:
+        print('Add interfaces to Netbox? Y/N: y')
         netbox.add_interfaces(netbox_normalized)
+    else:
+        ask_netbox_add = input('Add interfaces to Netbox? Y/N: ')
+        if ask_netbox_add.lower() == 'y':
+            netbox.add_interfaces(netbox_normalized)
+        else:
+            print("Exit.")
+            sys.exit()
+    print(netbox.result_message(show_diff))
 
 
 if __name__ == "__main__":
@@ -71,6 +80,14 @@ if __name__ == "__main__":
             Netbox-Interfaces - Connect to devices from inventory-file and push their interfaces into NetBox
         ''',
         epilog='Example: python netbox-interfaces.py'
+    )
+    parser.add_argument(
+        '-k', '--insecure',
+        action='store_true', help="Perform insecure SSL connections"
+    )
+    parser.add_argument(
+        '-f', '--force',
+        action='store_true', help="Push an update to NetBox without confirmation"
     )
     parser.add_argument(
         '-i', '--inventory',
