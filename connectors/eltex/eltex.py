@@ -70,7 +70,7 @@ class Eltex(BaseConnector):
                 return interface['port_mode'].split(" ")[0].lower()  # remove vlan id for access port
             if original_port_mode.startswith('Trunk'):
                 return "tagged"
-            return ''
+            return None
             
         def _define_interface_type(interface_name):
             """ Define interface_type by interface_name"""
@@ -93,7 +93,7 @@ class Eltex(BaseConnector):
             interface_data['mode'] = _convert_interface_mode(interface['port_mode'])
             interface_data['type'] = _define_interface_type(interface_data['name'])
             interface_data['enabled'] = True if interface['protocol'].lower() == 'up' else False
-            interface_data['description'] = interface['description']
+            interface_data['description'] = interface['description'].strip()
             if interface_data['enabled'] == False and interface_data['description'] == '':
                 ### ignore empty interfaces
                 del interface_data
